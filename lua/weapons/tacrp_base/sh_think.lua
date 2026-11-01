@@ -38,7 +38,31 @@ function SWEP:Think()
                 self:SecondaryShoot()
             end
         else
-            if (owner:KeyReleased(IN_ATTACK2) or (cfm < 0 and self:GetBurstCount2() >= -cfm)) then
+            // One-Button Akimbo routing for the right gun.
+            local oba = self:IsOneButtonAkimbo()
+            local aps = self:GetValue("AmmoPerShot")
+            if oba and cfm == 2
+                    and owner:KeyDown(IN_ATTACK)
+                    and self:Clip1() < aps
+                    and self:GetNextSecondaryFire() <= CurTime()
+                    and self:Clip2() >= aps then
+                // Full-auto: left gun is dry but right still has ammo, keep firing right.
+                self:SecondaryShoot()
+            elseif oba and cfm != 2
+                    and owner:KeyPressed(IN_ATTACK)
+                    and self:GetNextPrimaryFire() > CurTime()
+                    and self:GetOBANextRight()
+                    and self:GetNextSecondaryFire() <= CurTime()
+                    and self:Clip2() >= aps
+                    and self:GetBurstCount() == 0
+                    and self:GetBurstCount2() == 0 then
+                // Semi/burst: catch fast alt-clicks that the engine primary-side rate-limit drops.
+                self:SetOBANextRight(false)
+                self:SecondaryShoot()
+            end
+
+            local releaseKey = oba and IN_ATTACK or IN_ATTACK2
+            if (owner:KeyReleased(releaseKey) or (cfm < 0 and self:GetBurstCount2() >= -cfm)) then
                 if cfm < 0 and self:GetBurstCount2() > 1 then
                     if !self:GetValue("AutoBurst") then
                         self.Secondary.Automatic = false
@@ -58,34 +82,36 @@ function SWEP:Think()
         self:SetPatternCount(0)
     end
 
-    if owner:KeyPressed(TacRP.IN_CUSTOMIZE) then
-        if self:GetScopeLevel() == 0 then
-            self:ToggleCustomize(!self:GetCustomize())
-        else
-            if !self:GetValue("AlwaysPeek") then
-                local shouldpeek = !self:GetPeeking()
+    if (SERVER or !game.SinglePlayer()) then
+        if owner:KeyPressed(TacRP.IN_CUSTOMIZE) then
+            if (self:GetScopeLevel() == 0) then
+                self:ToggleCustomize(!self:GetCustomize())
+            else
+                if !self:GetValue("AlwaysPeek") then
+                    local shouldpeek = !self:GetPeeking()
 
-                if owner:GetInfoNum("tacrp_togglepeek", 0) == 0 then
-                    shouldpeek = true
-                end
+                    if (owner:GetInfoNum("tacrp_togglepeek", 0) == 0) then
+                        shouldpeek = true
+                    end
 
-                self:SetPeeking(shouldpeek)
+                    self:SetPeeking(shouldpeek)
 
-                if self:GetSightAmount() > 0 then
-                    self:SetLastScopeTime(CurTime())
+                    if (self:GetSightAmount() > 0) then
+                        self:SetLastScopeTime(CurTime())
+                    end
                 end
             end
-        end
-    elseif !self:GetValue("AlwaysPeek") and owner:GetInfoNum("tacrp_togglepeek", 0) == 0 and self:GetPeeking() and owner:KeyReleased(TacRP.IN_CUSTOMIZE) then
-        self:SetPeeking(false)
+        elseif (owner:KeyReleased(TacRP.IN_CUSTOMIZE) and !self:GetValue("AlwaysPeek") and owner:GetInfoNum("tacrp_togglepeek", 0) == 0 and self:GetPeeking()) then
+            self:SetPeeking(false)
 
-        if self:GetSightAmount() > 0 then
-            self:SetLastScopeTime(CurTime())
+            if (self:GetSightAmount() > 0) then
+                self:SetLastScopeTime(CurTime())
+            end
         end
-    end
 
-    if owner:KeyPressed(TacRP.IN_TACTICAL) then
-        self:ToggleTactical()
+        if owner:KeyPressed(TacRP.IN_TACTICAL) then
+            self:ToggleTactical()
+        end
     end
 
     self:ThinkRecoil()
